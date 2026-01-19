@@ -34,9 +34,9 @@ $subscriptions = [];
 
 $app->post('/verify-purchase', function (Request $request, Response $response) use (&$subscriptions) {
     $data = json_decode($request->getBody()->getContents(), true);
-    $appleId = $data['appleId'] ?? null;
-    $userId = $data['userId'] ?? null;
-    $receiptData = $data['receiptData'] ?? null;
+    $appleId = $data['apple_id'] ?? null;
+    $userId = $data['user_id'] ?? null;
+    $receiptData = $data['receipt_data'] ?? null;
 
     if (!$appleId || !$userId || !$receiptData) {
         $response->getBody()->write(json_encode(['success' => false, 'error' => 'Missing appleId, userId, or receiptData']));
@@ -86,19 +86,19 @@ $app->post('/verify-purchase', function (Request $request, Response $response) u
         $expirationDate = new DateTime('@' . ($expMs / 1000)); // Convert ms to seconds
 
         $subscriptions[$userId] = [
-            'appleId' => $appleId,
-            'productId' => $payload->productId ?? null,
-            'expirationDate' => $expirationDate,
+            'apple_id' => $appleId,
+            'product_id' => $payload->productId ?? null,
+            'expiration_date' => $expirationDate,
             'status' => (new DateTime()) < $expirationDate ? 'active' : 'expired',
-            'receiptData' => $receiptData
+            'receipt_data' => $receiptData
         ];
 
         $result = [
             'success' => true,
             'subscription' => [
-                'appleId' => $appleId,
-                'productId' => $subscriptions[$userId]['productId'],
-                'expirationDate' => $expirationDate->format(DateTime::ISO8601),
+                'apple_id' => $appleId,
+                'product_id' => $subscriptions[$userId]['product_id'],
+                'expiration_date' => $expirationDate->format(DateTime::ISO8601),
                 'status' => $subscriptions[$userId]['status']
             ]
         ];
@@ -112,7 +112,7 @@ $app->post('/verify-purchase', function (Request $request, Response $response) u
 });
 
 $app->get('/user-subscription/{userId}', function (Request $request, Response $response, $args) use (&$subscriptions) {
-    $userId = $args['userId'];
+    $userId = $args['user_id'];
 
     if (!isset($subscriptions[$userId])) {
         $response->getBody()->write(json_encode(['subscription' => null]));
@@ -123,7 +123,7 @@ $app->get('/user-subscription/{userId}', function (Request $request, Response $r
 
     try {
         // Re-verify the receipt
-        $parts = explode('.', $sub['receiptData']);
+        $parts = explode('.', $sub['receipt_data']);
         $header = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[0])), true);
         $kid = $header['kid'] ?? null;
         $x5c = $header['x5c'] ?? null;
@@ -134,12 +134,12 @@ $app->get('/user-subscription/{userId}', function (Request $request, Response $r
                 $certificate = "-----BEGIN CERTIFICATE-----\n" . $x5c[0] . "\n-----END CERTIFICATE-----";
                 $publicKey = openssl_pkey_get_public($certificate);
                 if ($publicKey) {
-                    $decoded = JWT::decode($sub['receiptData'], new Key($publicKey, 'ES256'));
+                    $decoded = JWT::decode($sub['receipt_data'], new Key($publicKey, 'ES256'));
                     $payload = $decoded;
                     $expMs = $payload->expiresDate ?? null;
                     if ($expMs) {
-                        $sub['expirationDate'] = new DateTime('@' . ($expMs / 1000));
-                        $sub['status'] = (new DateTime()) < $sub['expirationDate'] ? 'active' : 'expired';
+                        $sub['expiration_date'] = new DateTime('@' . ($expMs / 1000));
+                        $sub['status'] = (new DateTime()) < $sub['expiration_date'] ? 'active' : 'expired';
                     }
                 } else {
                     $sub['status'] = 'verification_failed';
@@ -156,9 +156,9 @@ $app->get('/user-subscription/{userId}', function (Request $request, Response $r
 
     $result = [
         'subscription' => [
-            'appleId' => $sub['appleId'],
-            'productId' => $sub['productId'],
-            'expirationDate' => $sub['expirationDate']->format(DateTime::ISO8601),
+            'apple_id' => $sub['apple_id'],
+            'product_id' => $sub['product_id'],
+            'expiration_date' => $sub['expiration_date']->format(DateTime::ISO8601),
             'status' => $sub['status']
         ]
     ];
